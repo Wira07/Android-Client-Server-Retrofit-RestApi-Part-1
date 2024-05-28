@@ -1,25 +1,41 @@
 package com.wira_fkom.android_client;
 
 import android.content.DialogInterface;
+import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
+import android.provider.MediaStore;
 import android.util.Log;
 import android.view.View;
+import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.Toast;
+
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+
+import okhttp3.MediaType;
+import okhttp3.MultipartBody;
+import okhttp3.RequestBody;
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
 
 public class MainActivity extends AppCompatActivity {
+    private static final int PICK_IMAGE_REQUEST = 1;
     private RecyclerView recyclerView;
     private UserAdapter userAdapter;
     private List<User> userList = new ArrayList<>();
+    private Uri selectedImageUri;
+    private ImageView imageViewPreview;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -40,13 +56,24 @@ public class MainActivity extends AppCompatActivity {
         });
 
         fetchUsers();
-    }private void showAddUserDialog() {
+    }
+
+    private void showAddUserDialog() {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("Add User");
 
         View view = getLayoutInflater().inflate(R.layout.dialog_add_user, null);
         final EditText editTextName = view.findViewById(R.id.editTextName);
         final EditText editTextEmail = view.findViewById(R.id.editTextEmail);
+        Button buttonSelectImage = view.findViewById(R.id.button_select_image);
+        imageViewPreview = view.findViewById(R.id.imageViewPreview);
+
+        buttonSelectImage.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                openImagePicker();
+            }
+        });
 
         builder.setView(view);
         builder.setPositiveButton("Add", new DialogInterface.OnClickListener() {
@@ -54,37 +81,89 @@ public class MainActivity extends AppCompatActivity {
             public void onClick(DialogInterface dialog, int which) {
                 String name = editTextName.getText().toString();
                 String email = editTextEmail.getText().toString();
-                addUser(name, email);
+                if (selectedImageUri != null) {
+                    uploadImage(name, email, selectedImageUri);
+                } else {
+                    Toast.makeText(MainActivity.this, "Please select an image", Toast.LENGTH_SHORT).show();
+                }
             }
         });
         builder.setNegativeButton("Cancel", null);
         builder.create().show();
     }
 
-    private void addUser(String name, String email) {
-        ApiService apiService = ApiClient.getClient().create(ApiService.class);
-        User user = new User(name, email);
-        Call<Void> call = apiService.insertUser(user);
+    private void openImagePicker() {
+        Intent intent = new Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+        startActivityForResult(intent, PICK_IMAGE_REQUEST);
+    }
 
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == PICK_IMAGE_REQUEST && resultCode == RESULT_OK && data != null && data.getData() != null) {
+            selectedImageUri = data.getData();
+            imageViewPreview.setImageURI(selectedImageUri);
+            imageViewPreview.setVisibility(View.VISIBLE);
+        }
+    }
+
+    private void uploadImage(String name, String email, Uri imageUri) {
+        ApiService apiService = ApiClient.getClient().create(ApiService.class);
+
+        File file = new File(FileUtils.getPath(this, imageUri));
+        RequestBody requestFile = RequestBody.create(MediaType.parse(getContentResolver().getType(imageUri)), file);
+        MultipartBody.Part body = MultipartBody.Part.createFormData("image", file.getName(), requestFile);
+        RequestBody userPart = RequestBody.create(MediaType.parse("application/json"), new User(name, email, "").toString());
+
+        Call<Void> call = apiService.uploadImage(body, userPart);
         call.enqueue(new Callback<Void>() {
             @Override
             public void onResponse(Call<Void> call, Response<Void> response) {
                 if (response.isSuccessful()) {
-                    Toast.makeText(MainActivity.this, "User added successfully", Toast.LENGTH_SHORT).show();
-                    fetchUsers();
+                    // Tambahkan pengguna ke daftar secara lokal
+                    userList.add(new User(name, email, file.getAbsolutePath()));
+                    userAdapter.notifyDataSetChanged();
+                    Toast.makeText(MainActivity.this, "User berhasil ditambahkan", Toast.LENGTH_SHORT).show();
+                } else {
+                    Toast.makeText(MainActivity.this, "Gagal menambahkan user", Toast.LENGTH_SHORT).show();
                 }
             }
 
             @Override
             public void onFailure(Call<Void> call, Throwable t) {
-                Toast.makeText(MainActivity.this, "Failed to add user", Toast.LENGTH_SHORT).show();
+                Toast.makeText(MainActivity.this, "Gagal menambahkan user", Toast.LENGTH_SHORT).show();
             }
         });
     }
 
+//
+//    private void uploadImage(String name, String email, Uri imageUri) {
+//        ApiService apiService = ApiClient.getClient().create(ApiService.class);
+//
+//        File file = new File(FileUtils.getPath(this, imageUri));
+//        RequestBody requestFile = RequestBody.create(MediaType.parse(getContentResolver().getType(imageUri)), file);
+//        MultipartBody.Part body = MultipartBody.Part.createFormData("image", file.getName(), requestFile);
+//        RequestBody userPart = RequestBody.create(MediaType.parse("application/json"), new User(name, email, "").toString());
+//
+//        Call<Void> call = apiService.uploadImage(body, userPart);
+//        call.enqueue(new Callback<Void>() {
+//            @Override
+//            public void onResponse(Call<Void> call, Response<Void> response) {
+//                if (response.isSuccessful()) {
+//                    fetchUsers(); // Segarkan daftar dari server
+//                    Toast.makeText(MainActivity.this, "User berhasil ditambahkan", Toast.LENGTH_SHORT).show();
+//                } else {
+//                    Toast.makeText(MainActivity.this, "Gagal menambahkan user", Toast.LENGTH_SHORT).show();
+//                }
+//            }
+//
+//            @Override
+//            public void onFailure(Call<Void> call, Throwable t) {
+//                Toast.makeText(MainActivity.this, "Gagal menambahkan user", Toast.LENGTH_SHORT).show();
+//            }
+//        });
+//    }
 
-
-// ...
 
     private void fetchUsers() {
         ApiService apiService = ApiClient.getClient().create(ApiService.class);
@@ -97,19 +176,13 @@ public class MainActivity extends AppCompatActivity {
                     userList.clear();
                     userList.addAll(response.body());
                     userAdapter.notifyDataSetChanged();
-                } else {
-                    Log.e("MainActivity", "Response error: " + response.errorBody().toString());
-                    Toast.makeText(MainActivity.this, "Failed to fetch users: " + response.message(), Toast.LENGTH_SHORT).show();
                 }
             }
 
             @Override
             public void onFailure(Call<List<User>> call, Throwable t) {
-                Log.e("MainActivity", "Fetch error: ", t);
-                Toast.makeText(MainActivity.this, "Failed to fetch users: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+                Toast.makeText(MainActivity.this, "Failed to load users", Toast.LENGTH_SHORT).show();
             }
         });
     }
-
-
 }
