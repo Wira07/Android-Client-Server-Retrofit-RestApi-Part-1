@@ -18,6 +18,7 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import com.squareup.picasso.Picasso;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
@@ -42,7 +43,7 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         if (getSupportActionBar() != null) {
-            getSupportActionBar().setTitle("Latihan Retorfit with API");
+            getSupportActionBar().setTitle("Latihan Retrofit with API");
         }
 
         recyclerView = findViewById(R.id.recyclerView);
@@ -71,6 +72,8 @@ public class MainActivity extends AppCompatActivity {
         View view = getLayoutInflater().inflate(R.layout.dialog_add_user, null);
         final EditText editTextName = view.findViewById(R.id.editTextName);
         final EditText editTextEmail = view.findViewById(R.id.editTextEmail);
+        final EditText editTextAlamat = view.findViewById(R.id.editTextAlamat);
+        final EditText editTextTelepon = view.findViewById(R.id.editTextTelepon);
         Button buttonSelectImage = view.findViewById(R.id.button_select_image);
         imageViewPreview = view.findViewById(R.id.imageViewPreview);
 
@@ -83,14 +86,15 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        builder.setView(view);
         builder.setPositiveButton("Add", new DialogInterface.OnClickListener() {
             @Override
             public void onClick(DialogInterface dialog, int which) {
                 String name = editTextName.getText().toString();
                 String email = editTextEmail.getText().toString();
+                String alamat = editTextAlamat.getText().toString();
+                String telepon = editTextTelepon.getText().toString();
                 if (selectedImageUri != null) {
-                    uploadImage(name, email, selectedImageUri);
+                    uploadImage(name, email, alamat, telepon, selectedImageUri);
                 } else {
                     Toast.makeText(MainActivity.this, "Please select an image", Toast.LENGTH_SHORT).show();
                 }
@@ -115,21 +119,33 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void uploadImage(String name, String email, Uri imageUri) {
+    private void uploadImage(String name, String email, String alamat, String telepon, Uri imageUri) {
         ApiService apiService = ApiClient.getClient().create(ApiService.class);
 
-        File file = new File(FileUtils.getPath(this, imageUri));
+        String filePath = FileUtils.getPath(this, imageUri); // Ensure you have the correct file path
+        if (filePath == null) {
+            Toast.makeText(this, "File path tidak ditemukan", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        File file = new File(filePath);
+
+        Log.d("MainActivity", "File Path: " + filePath);
+        Log.d("MainActivity", "File Exists: " + file.exists());
+
         RequestBody requestFile = RequestBody.create(MediaType.parse(getContentResolver().getType(imageUri)), file);
         MultipartBody.Part body = MultipartBody.Part.createFormData("image", file.getName(), requestFile);
-        RequestBody userPart = RequestBody.create(MediaType.parse("application/json"), new User(name, email, file.getAbsolutePath()).toString());
+        RequestBody namePart = RequestBody.create(MediaType.parse("multipart/form-data"), name);
+        RequestBody emailPart = RequestBody.create(MediaType.parse("multipart/form-data"), email);
+        RequestBody alamatPart = RequestBody.create(MediaType.parse("multipart/form-data"), alamat);
+        RequestBody teleponPart = RequestBody.create(MediaType.parse("multipart/form-data"), telepon);
 
-        Call<Void> call = apiService.uploadImage(body, userPart);
+        Call<Void> call = apiService.uploadImage(body, namePart, emailPart, alamatPart, teleponPart);
         call.enqueue(new Callback<Void>() {
             @Override
             public void onResponse(Call<Void> call, Response<Void> response) {
                 if (response.isSuccessful()) {
-                    // Tambahkan pengguna ke daftar secara lokal
-                    userList.add(new User(name, email, file.getAbsolutePath()));
+                    User newUser = new User(name, email, filePath, alamat, telepon);
+                    userList.add(newUser);
                     userAdapter.notifyDataSetChanged();
                     Toast.makeText(MainActivity.this, "User berhasil ditambahkan", Toast.LENGTH_SHORT).show();
                 } else {
@@ -163,7 +179,7 @@ public class MainActivity extends AppCompatActivity {
                 dialog.dismiss();
                 String name = inputName.getText().toString();
                 String email = inputEmail.getText().toString();
-                updateUser(user.getId(), name, email);
+                updateUser(user.getId(), name, email, user.getGambar(), user.getAlamat(), user.getTelepon());
             }
         });
 
@@ -177,9 +193,9 @@ public class MainActivity extends AppCompatActivity {
         builder.show();
     }
 
-    private void updateUser(int id, String name, String email) {
+    private void updateUser(int id, String name, String email, String gambar, String alamat, String telepon) {
         ApiService apiService = ApiClient.getClient().create(ApiService.class);
-        User user = new User(id, name, email, ""); // Menambahkan gambar kosong untuk sementara
+        User user = new User(id, name, email, gambar, alamat, telepon); // Menambahkan gambar kosong untuk sementara
         Call<Void> call = apiService.updateUser(user);
 
         Log.d("MainActivity", "Updating user: " + id + ", " + name + ", " + email);
@@ -188,27 +204,23 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onResponse(Call<Void> call, Response<Void> response) {
                 if (response.isSuccessful()) {
-                    Log.d("MainActivity", "User updated successfully");
-                    Toast.makeText(MainActivity.this, "User updated successfully", Toast.LENGTH_SHORT).show();
                     fetchUsers();
+                    Toast.makeText(MainActivity.this, "User berhasil diupdate", Toast.LENGTH_SHORT).show();
                 } else {
-                    Log.e("MainActivity", "Response error: " + response.errorBody().toString());
-                    Toast.makeText(MainActivity.this, "Failed to update user: " + response.message(), Toast.LENGTH_SHORT).show();
+                    Toast.makeText(MainActivity.this, "Gagal mengupdate user", Toast.LENGTH_SHORT).show();
                 }
             }
 
             @Override
             public void onFailure(Call<Void> call, Throwable t) {
-                Log.e("MainActivity", "Fetch error: ", t);
-                Toast.makeText(MainActivity.this, "Failed to update user: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+                Toast.makeText(MainActivity.this, "Gagal mengupdate user", Toast.LENGTH_SHORT).show();
             }
         });
     }
 
-    public void fetchUsers() {
+    void fetchUsers() {
         ApiService apiService = ApiClient.getClient().create(ApiService.class);
         Call<List<User>> call = apiService.getUsers();
-
         call.enqueue(new Callback<List<User>>() {
             @Override
             public void onResponse(Call<List<User>> call, Response<List<User>> response) {
@@ -221,8 +233,39 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void onFailure(Call<List<User>> call, Throwable t) {
-                Toast.makeText(MainActivity.this, "Failed to load users", Toast.LENGTH_SHORT).show();
+                Toast.makeText(MainActivity.this, "Gagal mengambil data user", Toast.LENGTH_SHORT).show();
             }
         });
+    }
+
+    public void deleteUser(final int id) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Hapus User");
+        builder.setMessage("Apakah Anda yakin ingin menghapus user ini?");
+        builder.setPositiveButton("Ya", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                ApiService apiService = ApiClient.getClient().create(ApiService.class);
+                Call<Void> call = apiService.deleteUser(id);
+                call.enqueue(new Callback<Void>() {
+                    @Override
+                    public void onResponse(Call<Void> call, Response<Void> response) {
+                        if (response.isSuccessful()) {
+                            fetchUsers();
+                            Toast.makeText(MainActivity.this, "User berhasil dihapus", Toast.LENGTH_SHORT).show();
+                        } else {
+                            Toast.makeText(MainActivity.this, "Gagal menghapus user", Toast.LENGTH_SHORT).show();
+                        }
+                    }
+
+                    @Override
+                    public void onFailure(Call<Void> call, Throwable t) {
+                        Toast.makeText(MainActivity.this, "Gagal menghapus user", Toast.LENGTH_SHORT).show();
+                    }
+                });
+            }
+        });
+        builder.setNegativeButton("Tidak", null);
+        builder.create().show();
     }
 }

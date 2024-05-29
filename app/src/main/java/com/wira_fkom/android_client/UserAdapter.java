@@ -13,7 +13,10 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 import com.bumptech.glide.Glide;
+import com.squareup.picasso.Picasso;
+
 import java.util.List;
+
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
@@ -32,6 +35,10 @@ public class UserAdapter extends RecyclerView.Adapter<UserAdapter.UserViewHolder
         }
     }
 
+    public void setMainActivity(MainActivity mainActivity) {
+        this.mainActivity = mainActivity;
+    }
+
     @NonNull
     @Override
     public UserViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
@@ -44,31 +51,34 @@ public class UserAdapter extends RecyclerView.Adapter<UserAdapter.UserViewHolder
         User user = userList.get(position);
         holder.textViewName.setText(user.getName());
         holder.textViewEmail.setText(user.getEmail());
-        Glide.with(holder.itemView.getContext())
+        holder.textViewAlamat.setText(user.getAlamat());
+        holder.textViewTelepon.setText(user.getTelepon());
+
+        // Load image using Glide
+        Glide.with(context)
                 .load(user.getGambar())
+                .placeholder(R.drawable.ic_launcher_background) // Optional: a placeholder image
+                .error(R.drawable.ic_launcher_background) // Optional: an error image
                 .into(holder.imageViewProfile);
 
-        // Mengatur OnClickListener pada itemView untuk menangani tap pada item
+        // Load image using Picasso
+        // Picasso.get().load(user.getGambar()).placeholder(R.drawable.placeholder_image).error(R.drawable.error_image).into(holder.imageViewProfile);
+
         holder.itemView.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if (mainActivity != null) {
-                    mainActivity.showUpdateDialog(user);
-                }
+                mainActivity.showUpdateDialog(user);
             }
         });
 
-        // Mengatur OnClickListener pada tombol delete untuk menangani tap pada tombol delete
         holder.buttonDelete.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 showDeleteConfirmationDialog(user.getId());
             }
         });
-
     }
 
-    // Metode untuk menampilkan dialog konfirmasi penghapusan
     private void showDeleteConfirmationDialog(final int userId) {
         AlertDialog.Builder builder = new AlertDialog.Builder(context);
         builder.setTitle("Delete User");
@@ -82,11 +92,9 @@ public class UserAdapter extends RecyclerView.Adapter<UserAdapter.UserViewHolder
         });
 
         builder.setNegativeButton("Cancel", null);
-
         builder.show();
     }
 
-    // Metode untuk menghapus pengguna dari daftar dan server
     private void deleteUser(int userId) {
         ApiService apiService = ApiClient.getClient().create(ApiService.class);
         Call<Void> call = apiService.deleteUser(userId);
@@ -102,7 +110,6 @@ public class UserAdapter extends RecyclerView.Adapter<UserAdapter.UserViewHolder
                         }
                     }
                     Toast.makeText(context, "User deleted successfully", Toast.LENGTH_SHORT).show();
-                    // Refresh user list after deletion
                     if (mainActivity != null) {
                         mainActivity.fetchUsers();
                     }
@@ -126,6 +133,8 @@ public class UserAdapter extends RecyclerView.Adapter<UserAdapter.UserViewHolder
     public static class UserViewHolder extends RecyclerView.ViewHolder {
         public TextView textViewName;
         public TextView textViewEmail;
+        public TextView textViewAlamat;
+        public TextView textViewTelepon;
         public ImageView imageViewProfile;
         public Button buttonDelete;
 
@@ -133,12 +142,10 @@ public class UserAdapter extends RecyclerView.Adapter<UserAdapter.UserViewHolder
             super(itemView);
             textViewName = itemView.findViewById(R.id.textViewName);
             textViewEmail = itemView.findViewById(R.id.textViewEmail);
+            textViewAlamat = itemView.findViewById(R.id.textViewAlamat);
+            textViewTelepon = itemView.findViewById(R.id.textViewTelepon);
             imageViewProfile = itemView.findViewById(R.id.imageViewProfile);
             buttonDelete = itemView.findViewById(R.id.buttonDelete);
         }
-    }
-
-    public void setMainActivity(MainActivity mainActivity) {
-        this.mainActivity = mainActivity;
     }
 }

@@ -22,13 +22,33 @@
             android:id="@+id/textViewName"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Name" />
+            android:text="Name"
+            android:textStyle="bold"
+            android:textSize="16sp"/>
 
         <TextView
             android:id="@+id/textViewEmail"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Email" />
+            android:text="Email"
+            android:textSize="14sp"
+            android:layout_marginTop="4dp"/>
+
+        <TextView
+            android:id="@+id/textViewAlamat"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Alamat"
+            android:textSize="14sp"
+            android:layout_marginTop="4dp"/>
+
+        <TextView
+            android:id="@+id/textViewTelepon"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Telepon"
+            android:textSize="14sp"
+            android:layout_marginTop="4dp"/>
 
         <Button
             android:id="@+id/buttonDelete"
@@ -36,6 +56,6 @@
             android:layout_height="wrap_content"
             android:layout_gravity="center"
             android:text="Hapus data" />
-    </LinearLayout>
 
+    </LinearLayout>
 </LinearLayout>
