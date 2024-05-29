@@ -6,22 +6,21 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.provider.MediaStore;
 import android.util.Log;
+import android.view.LayoutInflater;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.Toast;
-
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
-
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
-
 import okhttp3.MediaType;
 import okhttp3.MultipartBody;
 import okhttp3.RequestBody;
@@ -42,11 +41,18 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        if (getSupportActionBar() != null) {
+            getSupportActionBar().setTitle("Latihan Retorfit with API");
+        }
+
         recyclerView = findViewById(R.id.recyclerView);
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
 
-        userAdapter = new UserAdapter(userList);
+        userAdapter = new UserAdapter(userList, this);
         recyclerView.setAdapter(userAdapter);
+
+        // Set the MainActivity reference in the adapter
+        userAdapter.setMainActivity(this);
 
         findViewById(R.id.button_add).setOnClickListener(new View.OnClickListener() {
             @Override
@@ -67,6 +73,8 @@ public class MainActivity extends AppCompatActivity {
         final EditText editTextEmail = view.findViewById(R.id.editTextEmail);
         Button buttonSelectImage = view.findViewById(R.id.button_select_image);
         imageViewPreview = view.findViewById(R.id.imageViewPreview);
+
+        builder.setView(view);
 
         buttonSelectImage.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -113,7 +121,7 @@ public class MainActivity extends AppCompatActivity {
         File file = new File(FileUtils.getPath(this, imageUri));
         RequestBody requestFile = RequestBody.create(MediaType.parse(getContentResolver().getType(imageUri)), file);
         MultipartBody.Part body = MultipartBody.Part.createFormData("image", file.getName(), requestFile);
-        RequestBody userPart = RequestBody.create(MediaType.parse("application/json"), new User(name, email, "").toString());
+        RequestBody userPart = RequestBody.create(MediaType.parse("application/json"), new User(name, email, file.getAbsolutePath()).toString());
 
         Call<Void> call = apiService.uploadImage(body, userPart);
         call.enqueue(new Callback<Void>() {
@@ -136,36 +144,68 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-//
-//    private void uploadImage(String name, String email, Uri imageUri) {
-//        ApiService apiService = ApiClient.getClient().create(ApiService.class);
-//
-//        File file = new File(FileUtils.getPath(this, imageUri));
-//        RequestBody requestFile = RequestBody.create(MediaType.parse(getContentResolver().getType(imageUri)), file);
-//        MultipartBody.Part body = MultipartBody.Part.createFormData("image", file.getName(), requestFile);
-//        RequestBody userPart = RequestBody.create(MediaType.parse("application/json"), new User(name, email, "").toString());
-//
-//        Call<Void> call = apiService.uploadImage(body, userPart);
-//        call.enqueue(new Callback<Void>() {
-//            @Override
-//            public void onResponse(Call<Void> call, Response<Void> response) {
-//                if (response.isSuccessful()) {
-//                    fetchUsers(); // Segarkan daftar dari server
-//                    Toast.makeText(MainActivity.this, "User berhasil ditambahkan", Toast.LENGTH_SHORT).show();
-//                } else {
-//                    Toast.makeText(MainActivity.this, "Gagal menambahkan user", Toast.LENGTH_SHORT).show();
-//                }
-//            }
-//
-//            @Override
-//            public void onFailure(Call<Void> call, Throwable t) {
-//                Toast.makeText(MainActivity.this, "Gagal menambahkan user", Toast.LENGTH_SHORT).show();
-//            }
-//        });
-//    }
+    public void showUpdateDialog(final User user) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Update User");
 
+        View viewInflated = LayoutInflater.from(this).inflate(R.layout.dialog_update_user, (ViewGroup) findViewById(android.R.id.content), false);
+        final EditText inputName = viewInflated.findViewById(R.id.editTextName);
+        final EditText inputEmail = viewInflated.findViewById(R.id.editTextEmail);
 
-    private void fetchUsers() {
+        inputName.setText(user.getName());
+        inputEmail.setText(user.getEmail());
+
+        builder.setView(viewInflated);
+
+        builder.setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                dialog.dismiss();
+                String name = inputName.getText().toString();
+                String email = inputEmail.getText().toString();
+                updateUser(user.getId(), name, email);
+            }
+        });
+
+        builder.setNegativeButton(android.R.string.cancel, new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                dialog.cancel();
+            }
+        });
+
+        builder.show();
+    }
+
+    private void updateUser(int id, String name, String email) {
+        ApiService apiService = ApiClient.getClient().create(ApiService.class);
+        User user = new User(id, name, email, ""); // Menambahkan gambar kosong untuk sementara
+        Call<Void> call = apiService.updateUser(user);
+
+        Log.d("MainActivity", "Updating user: " + id + ", " + name + ", " + email);
+
+        call.enqueue(new Callback<Void>() {
+            @Override
+            public void onResponse(Call<Void> call, Response<Void> response) {
+                if (response.isSuccessful()) {
+                    Log.d("MainActivity", "User updated successfully");
+                    Toast.makeText(MainActivity.this, "User updated successfully", Toast.LENGTH_SHORT).show();
+                    fetchUsers();
+                } else {
+                    Log.e("MainActivity", "Response error: " + response.errorBody().toString());
+                    Toast.makeText(MainActivity.this, "Failed to update user: " + response.message(), Toast.LENGTH_SHORT).show();
+                }
+            }
+
+            @Override
+            public void onFailure(Call<Void> call, Throwable t) {
+                Log.e("MainActivity", "Fetch error: ", t);
+                Toast.makeText(MainActivity.this, "Failed to update user: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    public void fetchUsers() {
         ApiService apiService = ApiClient.getClient().create(ApiService.class);
         Call<List<User>> call = apiService.getUsers();
 
